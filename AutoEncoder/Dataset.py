@@ -17,14 +17,14 @@ def normalize_peak(waveform):
         return waveform # Return as is if waveform is silent or near-silent
 
 class AudioSnippetDataset(Dataset):
-    def __init__(self, dataset_directory, snippet_length=44100, target_sr=44100, recursive=True, transform=None): # 1 second audio clips
+    def __init__(self, dataset_directory, snippet_length=44100, target_sr=44100, recursive=True, normalize_peak=True): # 1 second audio clips
         super().__init__()
         logging.info("// ------------------ INIT DATASET ------------------ //\n\n")
         self.dataset_directory = Path(dataset_directory) # Convert string to Path object
         self.snippet_length = snippet_length
         self.target_sr = target_sr
         self.recursive = recursive
-        self.transform = transform
+        self.normalize_peak = normalize_peak
 
         logging.info(f"Target snippet length: {self.snippet_length} samples")
         logging.info(f"Target sampling rate: {self.target_sr} Hz / {self.target_sr / 1000}kHz") # (usually 44.1kHz)
@@ -127,9 +127,8 @@ class AudioSnippetDataset(Dataset):
                 snippet = snippet[:, :self.snippet_length]
                 logging.warning(f"Truncated snippet for index {idx} from {current_len} to {self.snippet_length}")
 
-            # --- TODO: Add optional transform here ---
-            if self.transform:
-               snippet = self.transform(snippet)
+            if self.normalize_peak:
+               snippet = normalize_peak(snippet)
             return snippet
 
         except Exception as e:
@@ -140,6 +139,6 @@ class AudioSnippetDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = AudioSnippetDataset("../testdata")
+    dataset = AudioSnippetDataset("./Test_Dataset")
     x = dataset[0]
     print(x.shape)
