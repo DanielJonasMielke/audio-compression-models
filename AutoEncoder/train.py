@@ -45,7 +45,7 @@ def yaml_parser(training_args):
         exit(1)
 
 def training_pipeline(training_conf):
-    with wandb.init(project=training_conf.get("wandb_project"), config=training_conf, mode="offline",):
+    with wandb.init(project=training_conf.get("wandb_project"), config=training_conf, mode="online",):
         config = wandb.config
 
         # --- Determine and store effective device ---
@@ -57,7 +57,8 @@ def training_pipeline(training_conf):
         wandb.config.update({"effective_device": effective_device}, allow_val_change=True)
 
         model, train_loader, val_loader, criterion, optimizer, scheduler, scaler = init_training(config)
-        logger.info(f"YEEES")
+
+        train(model, train_loader, criterion, optimizer, scheduler, scaler, config)
 
 def init_training(config):
     # reproducibility
@@ -156,6 +157,60 @@ def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed + worker_id)
     random.seed(worker_seed + worker_id)
+
+
+def train(model, train_loader, criterion, optimizer, scheduler, scaler, config):
+    wandb.watch(model, criterion=criterion, log='all', log_freq=config['log_freq'])
+
+    max_steps = config["training_steps"]
+    global_step = 0
+    epoch = 1
+
+    # --- Training Loop ---
+    total_batches = len(train_loader)
+    logger.info(f"Total batches per epoch: {total_batches}")
+    logger.info(f"Starting training for {max_steps} steps...")
+
+    progress_bar = tqdm(total=max_steps, desc="Training Steps", unit="step")
+
+    while global_step < max_steps:
+        for i, batch in enumerate(train_loader):
+            if global_step >= max_steps:
+                break
+
+            model.train()
+            optimizer.zero_grad()
+            batch = batch.to(config['effective_device'])
+
+            with torch.autocast("cuda", enabled=config['mixed_precision']):
+                reconstructed = model(batch)
+                loss = criterion(reconstructed, batch)
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler.step()
+
+            wandb.log({"loss": loss.item(), "epoch": epoch, "step": global_step})
+
+            if global_step % config['log_freq'] == 0:
+                progress_bar.clear()
+                logger.info(f"Step [{global_step + 1}/{max_steps}], Loss: {loss.item():.4f}")
+                progress_bar.refresh()
+
+            global_step += 1
+            progress_bar.update(1)
+
+        # Save model checkpoint every config['save_every'] epochs
+        if epoch % config['save_every'] == 0:
+            progress_bar.clear()
+            logger.info(f"Saving model checkpoint at epoch {epoch}")
+            progress_bar.refresh()
+            save_path = config['safe_model_path']
+        epoch += 1
+
+
+
 
 def main(training_args):
     yaml_conf = yaml_parser(training_args)
