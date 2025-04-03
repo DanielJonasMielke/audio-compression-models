@@ -58,7 +58,7 @@ def training_pipeline(training_conf):
 
         model, train_loader, val_loader, criterion, optimizer, scheduler, scaler = init_training(config)
 
-        train(model, train_loader, criterion, optimizer, scheduler, scaler, config)
+        train(model, train_loader, val_loader, criterion, optimizer, scheduler, scaler, config)
 
 def init_training(config):
     # reproducibility
@@ -159,7 +159,7 @@ def seed_worker(worker_id):
     random.seed(worker_seed + worker_id)
 
 
-def train(model, train_loader, criterion, optimizer, scheduler, scaler, config):
+def train(model, train_loader, val_loader, criterion, optimizer, scheduler, scaler, config):
     wandb.watch(model, criterion=criterion, log='all', log_freq=config['log_freq'])
 
     max_steps = config["training_steps"]
@@ -201,15 +201,29 @@ def train(model, train_loader, criterion, optimizer, scheduler, scaler, config):
             global_step += 1
             progress_bar.update(1)
 
-        # Save model checkpoint every config['save_every'] epochs
-        if epoch % config['save_every'] == 0:
-            progress_bar.clear()
-            logger.info(f"Saving model checkpoint at epoch {epoch}")
-            progress_bar.refresh()
-            save_path = config['safe_model_path']
+            if global_step % config['validate_every'] == 0:
+                val_loss = validate(model, val_loader, criterion, config)
+                wandb.log({"val_loss": val_loss, "epoch": epoch, "step": global_step})
+                logger.info(f"Validation Loss: {val_loss:.4f}")
+
         epoch += 1
 
 
+def validate(model, val_loader, criterion, config):
+    model.eval()
+    total_loss = 0
+
+    with torch.no_grad():
+        for batch in val_loader:
+            batch = batch.to(config['effective_device'])
+
+            with torch.autocast("cuda", enabled=config['mixed_precision']):
+                reconstructed = model(batch)
+                loss = criterion(reconstructed, batch)
+
+            total_loss += loss.item()
+
+    return total_loss / len(val_loader)
 
 
 def main(training_args):

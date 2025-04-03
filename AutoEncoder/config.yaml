@@ -1,0 +1,24 @@
+# config.yaml
+dataset_dir: "../VocalSet"       # Make sure this path is correct!
+snippet_length: 44100
+target_sr: 44100
+batch_size: 16
+learning_rate: 1e-4
+weight_decay: 0.001
+training_steps: 10000                # One epoch in training steps equals len(train_loader) --- So 10 epochs = 10*len(train_loader)
+warmup_steps: 500                    # HIGHLY INDIVIDUAL, PLEASE ADJUST (Recommend 1 epoch)
+log_freq: 100                         # Determines how often you log to wandb API
+wandb_project: "audio-autoencoder"   # Updated project name example
+wandb_entity: null                   # Set your wandb username/entity if needed
+device: "auto"                       # Let's add an 'auto' option for device
+mixed_precision: true                # Use Automatic Mixed Precision (AMP) for faster training on compatible GPUs
+save_every: 1                        # Save the model every N epochs (set to 0 or negative to save only best/last)
+safe_model_path: "./checkpoints"     # Path to save the model checkpoints
+validate_every: 10                   # Validate the model every N steps
+grad_accumulation: 2           # Number of steps to accumulate gradients before optimizer update
+normalize_peak: true
+num_workers: 4
+recursive: True                      # Determines if the dataset directory should be searched for audio files recursively
+normalize_audio: True                # Determines if the audio inputs should be normalized between -1 and 1 amplitude (Recommended)
+val_split: 0.1                       # Fraction of data to use for validation (e.g., 0.1 = 10%) - Set to 0 to use all data for training
+seed: 42                             # For Reproducibility
